@@ -18,13 +18,17 @@ export const metadata: Metadata = {
     "A boutique hotel for slow mornings, forest air, and unhurried stays. Lounge, mineral pool, spa, and quiet rooms in the Carpathians.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+/** Nested layouts must NOT render <html>/<body> — only the root layout does. */
+export default function ClientDashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html
-      lang="en"
-      className={`${display.variable} ${sans.variable} h-full scroll-smooth antialiased`}
+    <div
+      className={`${display.variable} ${sans.variable} min-h-screen scroll-smooth antialiased bg-cream font-sans text-ink`}
     >
-      <body className="min-h-full bg-cream font-sans text-ink">{children}</body>
-    </html>
+      {children}
+    </div>
   );
 }

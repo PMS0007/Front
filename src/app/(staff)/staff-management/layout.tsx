@@ -1,10 +1,13 @@
 import Sidebar from "@/components/dashboard/Sidebar";
+import { requireHotelStaff } from "@/lib/staff-auth";
 
-export default function StaffLayout({
+export default async function StaffLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await requireHotelStaff();
+
   return (
     <div className="flex h-screen bg-slate-50">
       <Sidebar />
