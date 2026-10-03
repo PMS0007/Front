@@ -19,6 +19,7 @@ export interface StatValues {
   checkIns: number;
   cleaning: number;
   occupiedRooms: number;
+  maintenance: number;
 }
 
 
@@ -42,6 +43,7 @@ export interface IRoomType {
   description?: string | null;
   capacity?: number;
   base_price?: string;
+  amenities ?: IAmenity[]
 }
 
 export interface IRoom {
@@ -78,3 +80,12 @@ export interface UpdateRoomPayload {
   status?: string;
   room_type_name?: string;
 }
+export interface IAmenity {
+  id: number;
+  name: string;
+  description?: string | null;
+  icon?: string | null;
+}
+
+
+

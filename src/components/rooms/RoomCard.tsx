@@ -7,9 +7,6 @@ import {
   Sparkles,
   Pencil,
   Trash2,
-  Wifi,
-  Tv,
-  Snowflake,
   BedDouble,
   Users,
 } from "lucide-react";
@@ -49,6 +46,12 @@ const STATUS_CONFIG: Record<
     accent: "bg-sky-500",
     pill: "border-sky-200 text-sky-700 bg-sky-50",
   },
+  Maintenance : {
+    label : "maintenance",
+    dot: "bg-sky-500",
+    accent: "bg-sky-500",
+    pill: "border-sky-200 text-sky-700 bg-sky-50"
+  }
 };
 
 const DEFAULT_CONFIG = {
@@ -111,10 +114,32 @@ export default function RoomCard({ room, onEdit, onDelete, onStatusChange }: Roo
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 mb-4">
-          <AmenityIcon icon={<Wifi className="w-3.5 h-3.5" />} label="WiFi" />
-          <AmenityIcon icon={<Tv className="w-3.5 h-3.5" />} label="TV" />
-          <AmenityIcon icon={<Snowflake className="w-3.5 h-3.5" />} label="Air conditioning" />
+        <div className="amenities-list mb-3">
+          <h3 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+            Amenities
+          </h3>
+
+          {room_type?.amenities && room_type.amenities.length > 0 ? (
+            <ul className="flex flex-wrap gap-1.5">
+              {room_type.amenities.map((amenity) => (
+                <li
+                  key={amenity.id}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs font-medium text-slate-600 shadow-2xs transition-colors hover:border-slate-300 hover:bg-slate-100"
+                >
+                  {amenity.icon && (
+                    <img
+                      src={amenity.icon}
+                      alt={amenity.name}
+                      className="h-3.5 w-3.5 object-contain opacity-75"
+                    />
+                  )}
+                  <span>{amenity.name}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs italic text-slate-400">No amenities available</p>
+          )}
         </div>
 
         <div className="space-y-1.5 pt-3 border-t border-slate-100">
@@ -137,16 +162,18 @@ export default function RoomCard({ room, onEdit, onDelete, onStatusChange }: Roo
               </button>
             )}
 
-            {status === "Reserved" && (
-              <button className="flex items-center justify-center gap-1.5 border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-medium py-2 rounded-lg transition-colors">
-                <Eye className="w-3.5 h-3.5" /> View booking
-              </button>
-            )}
-
             {status === "Cleaning" && (
               <div className="flex items-center justify-center gap-1.5 border border-dashed border-sky-200 text-sky-500 text-xs font-medium py-2 rounded-lg">
                 In progress
               </div>
+            )}
+            {status === "Maintenance" && (
+              <button
+                onClick={() => onStatusChange?.(room?.id!, "Maintenance")}
+                className="flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium py-2 rounded-lg transition-colors"
+              >
+                <LogIn className="w-3.5 h-3.5" /> Check in
+              </button>
             )}
 
             <button
@@ -157,18 +184,12 @@ export default function RoomCard({ room, onEdit, onDelete, onStatusChange }: Roo
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-1.5">
-            {status !== "Reserved" && (
-              <button className="flex items-center justify-center gap-1 border border-slate-200 hover:bg-slate-50 text-slate-500 text-xs font-medium py-2 rounded-lg transition-colors">
-                <Eye className="w-3.5 h-3.5" /> View
-              </button>
-            )}
+          <div className="grid grid-cols-2 gap-1.5">
 
             <button
               onClick={() => onEdit?.(room)}
-              className={`flex items-center justify-center gap-1 border border-slate-200 hover:bg-slate-50 text-slate-500 text-xs font-medium py-2 rounded-lg transition-colors ${
-                status === "Reserved" ? "col-span-2" : ""
-              }`}
+              className={`flex items-center justify-center gap-1 border border-slate-200 hover:bg-slate-50 text-slate-500 text-xs font-medium py-2 rounded-lg transition-colors ${status === "Reserved" ? "col-span-2" : ""
+                }`}
             >
               <Pencil className="w-3.5 h-3.5" /> Edit
             </button>
@@ -187,13 +208,3 @@ export default function RoomCard({ room, onEdit, onDelete, onStatusChange }: Roo
   );
 }
 
-function AmenityIcon({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <span
-      title={label}
-      className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-50 border border-slate-100 text-slate-400 hover:text-slate-600 hover:border-slate-200 transition-colors"
-    >
-      {icon}
-    </span>
-  );
-}

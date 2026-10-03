@@ -1,0 +1,14 @@
+import Sidebar from "@/components/dashboard/Sidebar";
+
+export default function StaffLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex h-screen bg-slate-50">
+      <Sidebar />
+      <div className="flex flex-1 flex-col overflow-y-auto">{children}</div>
+    </div>
+  );
+}

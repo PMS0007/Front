@@ -83,10 +83,9 @@ export const recentActivity: ActivityItem[] = [
 ];
 
 export const navItems = [
-  { label: "Dashboard", icon: "grid", href: "/" },
+  { label: "Dashboard", icon: "grid", href: "/staff" },
   { label: "Rooms", icon: "door", href: "/rooms" },
   { label: "Bookings", icon: "calendar", href: "/bookings", badge: 3 },
-  { label: "Dining", icon: "food", href: "/dining", badge: 5 },
-  { label: "Trip Packages", icon: "map", href: "/trip-packages" },
+  { label: "Staff", icon: "map", href: "/staff-management" },
   { label: "Billing", icon: "file", href: "/billing" },
 ] as const;

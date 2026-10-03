@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Menu, Phone, TreePine, X } from "lucide-react";
+import { Menu, Phone, TreePine, X, User } from "lucide-react";
 import { hotel } from "@/data/hotelData";
 import { cn } from "@/lib/cn";
 
@@ -16,9 +16,18 @@ const links = [
 type HeaderProps = {
   onCallMeBack: () => void;
   onBookNow: () => void;
+  title?: string;     
+  subtitle?: string;   
+  userName?: string;
 };
 
-export default function Header({ onCallMeBack, onBookNow }: HeaderProps) {
+export default function Header({ 
+  onCallMeBack, 
+  onBookNow,
+  title,
+  subtitle,
+  userName 
+}: HeaderProps) {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -50,7 +59,14 @@ export default function Header({ onCallMeBack, onBookNow }: HeaderProps) {
           <span className="grid h-10 w-10 place-items-center rounded-2xl bg-forest text-cream">
             <TreePine className="h-5 w-5" />
           </span>
-          <span className="font-display text-2xl tracking-tight">{hotel.name}</span>
+          <div className="flex flex-col">
+            <span className="font-display text-2xl tracking-tight">
+              {title || hotel.name}
+            </span>
+            {subtitle && (
+              <span className="text-xs text-forest/60 -mt-1">{subtitle}</span>
+            )}
+          </div>
         </a>
 
         <nav className="hidden items-center gap-8 text-sm text-forest/80 lg:flex">
@@ -82,11 +98,14 @@ export default function Header({ onCallMeBack, onBookNow }: HeaderProps) {
             Book Now
           </button>
 
+
           <button
             type="button"
-            className="rounded-full bg-forest py-3 px-4 text-sm text-cream shadow-sm transition hover:bg-moss"
+            className="flex items-center gap-2 rounded-full bg-forest py-2 px-3.5 text-sm text-cream shadow-sm transition hover:bg-moss"
+            title={userName || "Profile"}
           >
-            O
+            <User className="h-4 w-4" />
+            {userName && <span className="font-medium text-xs">{userName}</span>}
           </button>
         </div>
 

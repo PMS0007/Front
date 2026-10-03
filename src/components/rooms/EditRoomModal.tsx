@@ -1,23 +1,34 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { BedDouble, Wifi, Tv, Snowflake, Users, X } from "lucide-react";
+import { BedDouble, Users, X } from "lucide-react";
 
-export type RoomStatus = "available" | "occupied" | "cleaning";
+export interface AmenityItem {
+  id: number;
+  name: string;
+  description?: string | null;
+  icon?: string | null;
+}
 
 export interface RoomFormData {
   id?: number;
   number: string;
-  type: string; 
-  status: RoomStatus;
+  type: string;
+  status: string;
   rate: number;
   occupancy: number;
-  wifi: boolean;
-  tv: boolean;
-  ac: boolean;
+  amenities?: AmenityItem[];
 }
 
-interface RoomTypeOption {
+export interface RoomTypeOption {
+  label: string;
+  value: string;
+  base_price?: string;
+  capacity?: number;
+  amenities?: AmenityItem[];
+}
+
+interface SelectOption {
   label: string;
   value: string;
 }
@@ -27,43 +38,48 @@ interface EditRoomModalProps {
   onClose: () => void;
   room: RoomFormData;
   types: RoomTypeOption[];
+  statuses: SelectOption[];
   onSave?: (updated: RoomFormData) => Promise<void> | void;
 }
 
-const STATUS_STYLES: Record<RoomStatus, string> = {
+const DEFAULT_STATUS_STYLE = "bg-slate-100 text-slate-600";
+const STATUS_STYLES: Record<string, string> = {
   available: "bg-emerald-50 text-emerald-700",
   occupied: "bg-rose-50 text-rose-700",
   cleaning: "bg-sky-50 text-sky-700",
 };
+const getStatusStyle = (status: string) => STATUS_STYLES[status] ?? DEFAULT_STATUS_STYLE;
 
-export default function EditRoomModal({ isOpen, onClose, room, types, onSave }: EditRoomModalProps) {
+export default function EditRoomModal({
+  isOpen,
+  onClose,
+  room,
+  types,
+  statuses,
+  onSave,
+}: EditRoomModalProps) {
   const numberRef = useRef<HTMLInputElement>(null);
-  const rateRef = useRef<HTMLInputElement>(null);
-  const occupancyRef = useRef<HTMLInputElement>(null);
 
-  const [status, setStatus] = useState<RoomStatus>(room.status);
+  const [status, setStatus] = useState<string>(room.status);
   const [type, setType] = useState(room.type);
-  const [wifi, setWifi] = useState(room.wifi);
-  const [tv, setTv] = useState(room.tv);
-  const [ac, setAc] = useState(room.ac);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Оновлення внутрішнього стану при зміні об'єкта room або відкритті вікна
   useEffect(() => {
     if (isOpen) {
       setStatus(room.status);
       setType(room.type);
-      setWifi(room.wifi);
-      setTv(room.tv);
-      setAc(room.ac);
-      
       if (numberRef.current) numberRef.current.value = room.number;
-      if (rateRef.current) rateRef.current.value = String(room.rate);
-      if (occupancyRef.current) occupancyRef.current.value = String(room.occupancy);
     }
   }, [isOpen, room]);
 
   if (!isOpen) return null;
+
+  const selectedType = types.find((t) => t.value === type);
+  const effectiveRate = selectedType?.base_price !== undefined
+    ? Number(selectedType.base_price)
+    : room.rate;
+  const effectiveOccupancy = selectedType?.capacity ?? room.occupancy;
+  const effectiveAmenities = selectedType?.amenities ?? room.amenities ?? [];
 
   const handleSave = async () => {
     try {
@@ -72,18 +88,16 @@ export default function EditRoomModal({ isOpen, onClose, room, types, onSave }: 
         await onSave({
           id: room.id,
           number: numberRef.current?.value ?? room.number,
-          type, 
+          type,
           status,
-          rate: Number(rateRef.current?.value ?? room.rate),
-          occupancy: Number(occupancyRef.current?.value ?? room.occupancy),
-          wifi,
-          tv,
-          ac,
+          rate: effectiveRate,
+          occupancy: effectiveOccupancy,
+          amenities: effectiveAmenities,
         });
       }
       onClose();
     } catch (error) {
-      console.error("Помилка збереження кімнати:", error);
+      console.error("error", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -139,12 +153,14 @@ export default function EditRoomModal({ isOpen, onClose, room, types, onSave }: 
 
             <select
               value={status}
-              onChange={(e) => setStatus(e.target.value as RoomStatus)}
-              className={`shrink-0 cursor-pointer rounded-full border-none px-3 py-1.5 text-[11.5px] font-semibold outline-none ${STATUS_STYLES[status]}`}
+              onChange={(e) => setStatus(e.target.value)}
+              className={`shrink-0 cursor-pointer rounded-full border-none px-3 py-1.5 text-[11.5px] font-semibold outline-none ${getStatusStyle(status)}`}
             >
-              <option value="available">available</option>
-              <option value="occupied">occupied</option>
-              <option value="cleaning">cleaning</option>
+              {statuses.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -155,17 +171,8 @@ export default function EditRoomModal({ isOpen, onClose, room, types, onSave }: 
               <label className="mb-1.5 block text-xs font-semibold text-slate-500">
                 Rate / Night
               </label>
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">
-                  $
-                </span>
-                <input
-                  ref={rateRef}
-                  type="number"
-                  min={0}
-                  defaultValue={room.rate}
-                  className="w-full rounded-lg border border-slate-200 py-2 pl-6 pr-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
-                />
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-500">
+                ${effectiveRate.toFixed(2)}
               </div>
             </div>
 
@@ -174,30 +181,36 @@ export default function EditRoomModal({ isOpen, onClose, room, types, onSave }: 
                 <Users size={12} />
                 Occupancy
               </label>
-              <div className="relative">
-                <input
-                  ref={occupancyRef}
-                  type="number"
-                  min={1}
-                  defaultValue={room.occupancy}
-                  className="w-full rounded-lg border border-slate-200 py-2 pl-3 pr-14 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
-                  guests
-                </span>
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-500">
+                {effectiveOccupancy} guests
               </div>
             </div>
           </div>
+          <p className="-mt-3 text-[11px] text-slate-400">
+            Set by room type. Edit in Manage Room Types.
+          </p>
 
           <div>
             <label className="mb-1.5 block text-xs font-semibold text-slate-500">
               Amenities
             </label>
-            <div className="flex gap-2">
-              <ToggleButton active={wifi} onClick={() => setWifi(!wifi)} icon={<Wifi size={16} />} label="WiFi" />
-              <ToggleButton active={tv} onClick={() => setTv(!tv)} icon={<Tv size={16} />} label="TV" />
-              <ToggleButton active={ac} onClick={() => setAc(!ac)} icon={<Snowflake size={16} />} label="A/C" />
-            </div>
+            {effectiveAmenities.length > 0 ? (
+              <ul className="flex flex-wrap gap-2">
+                {effectiveAmenities.map((amenity) => (
+                  <li
+                    key={amenity.id}
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600"
+                  >
+                    {amenity.icon && (
+                      <img src={amenity.icon} alt={amenity.name} width={16} height={16} />
+                    )}
+                    <span>{amenity.name}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-slate-400">Not found amenity</p>
+            )}
           </div>
         </div>
 
@@ -219,30 +232,5 @@ export default function EditRoomModal({ isOpen, onClose, room, types, onSave }: 
         </div>
       </div>
     </div>
-  );
-}
-
-function ToggleButton({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex flex-1 flex-col items-center gap-1.5 rounded-lg border-[1.5px] px-1.5 py-2.5 text-[10.5px] font-semibold transition-colors ${
-        active ? "border-blue-600 bg-blue-50 text-blue-600" : "border-slate-200 bg-white text-slate-400"
-      }`}
-    >
-      {icon}
-      {label}
-    </button>
   );
 }

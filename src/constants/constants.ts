@@ -16,6 +16,13 @@ export const urls = {
   list_room_type : "list_room_type/",
   list_status : "list_status/",
   list_room : "list_room/",
-  update_destroy_room : "update_destroy_room/"
+  update_destroy_room : "update_destroy_room/",
+  create_amenity : "create_amenity/",
+  list_amenity : "list_amenity/",
+  update_room_type : "retrieve_update_destroy_room_type/",
+  destroy_room_type : "retrieve_update_destroy_room_type/13/",
+  get_booking_information: "get_booking_information/",
+  create_booking_by_staff : "staff/create_booking/",
+  get_booking : "get_booking/"
 
 };

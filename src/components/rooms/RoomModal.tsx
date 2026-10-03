@@ -49,10 +49,23 @@ export function Field({
   );
 }
 
-export function Checkbox({ label }: { label: string }) {
+export function Checkbox({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked?: boolean;
+  onChange?: (checked: boolean) => void;
+}) {
   return (
     <label className="flex items-center gap-2 text-sm text-gray-700">
-      <input type="checkbox" className="h-3.5 w-3.5 rounded border-gray-300" />
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange?.(e.target.checked)}
+        className="h-3.5 w-3.5 rounded border-gray-300"
+      />
       {label}
     </label>
   );

@@ -79,7 +79,7 @@ export default function ProfileMenu() {
         </div>
 
         <div className="flex flex-col items-center gap-3 border-b border-slate-200 px-6 py-8">
-          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-teal-500 text-2xl font-semibold text-white">
+          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-linear-to-br from-blue-600 to-teal-500 text-2xl font-semibold text-white">
             {initial}
           </span>
           <div className="text-center">
