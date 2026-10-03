@@ -23,6 +23,10 @@ export const urls = {
   destroy_room_type : "retrieve_update_destroy_room_type/13/",
   get_booking_information: "get_booking_information/",
   create_booking_by_staff : "staff/create_booking/",
-  get_booking : "get_booking/"
-
+  get_booking : "get_booking/",
+  create_staff: "create_staff/",
+  create_staff_role: "create_staff_role/",
+  list_staff: "list_staff/",
+  search_staff: "search_staff/",
+  get_dashboard_status: "get_dashboard_status/",
 };
