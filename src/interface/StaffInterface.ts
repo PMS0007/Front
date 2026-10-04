@@ -20,6 +20,13 @@ export interface StaffListItem {
   groups?: StaffGroupApi[] | string[] | number[];
 }
 
+/** Response item from search_staff/?full_name= */
+export interface StaffSearchItem {
+  full_name?: string | null;
+  phone?: string | null;
+  hired_at?: string | null;
+}
+
 export interface CreateStaffPayload {
   email: string;
   staff_profile: {
@@ -27,6 +34,12 @@ export interface CreateStaffPayload {
     phone: string;
     active: boolean;
   };
+}
+
+export interface UpdateStaffPayload {
+  full_name?: string;
+  phone?: string;
+  active?: boolean;
 }
 
 export interface DashboardStatus {

@@ -29,4 +29,6 @@ export const urls = {
   list_staff: "list_staff/",
   search_staff: "search_staff/",
   get_dashboard_status: "get_dashboard_status/",
+  update_staff: "update_staff/",
+  destroy_staff: "destroy_staff/",
 };

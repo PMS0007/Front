@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Plus,
   Search,
@@ -14,7 +14,6 @@ import {
   Pencil,
   Trash2,
   X,
-  ListChecks,
   Filter,
   Loader2,
 } from 'lucide-react';
@@ -33,7 +32,6 @@ const AVATAR_COLORS = {
 } as const;
 
 type AvatarColor = keyof typeof AVATAR_COLORS;
-
 const COLOR_KEYS = Object.keys(AVATAR_COLORS) as AvatarColor[];
 
 const inputClass =
@@ -63,6 +61,11 @@ function groupsLabel(groups?: StaffListItem['groups']): string {
 
 function displayName(item: StaffListItem): string {
   return item.staff_profile?.full_name?.trim() || item.email || `Staff #${item.id}`;
+}
+
+function profileIdOf(item: StaffListItem): number | null {
+  const id = item.staff_profile?.id;
+  return typeof id === 'number' ? id : null;
 }
 
 function StatCard({
@@ -136,7 +139,9 @@ export default function StaffManagement() {
   const [searching, setSearching] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [addStaffOpen, setAddStaffOpen] = useState(false);
+  const [editMember, setEditMember] = useState<StaffListItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const searchRequestId = useRef(0);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -167,31 +172,45 @@ export default function StaffManagement() {
     loadDashboard();
   }, [loadStaff, loadDashboard]);
 
-  // Debounced search via API when query is non-empty
+  // Debounced search — response shape: { data: [ { full_name, phone, hired_at } ] }
   useEffect(() => {
     const q = search.trim();
+
     if (q === '') {
-      // restore full list when search cleared
-      loadStaff();
+      // only reload full list when user cleared search (not on first mount — loadStaff already ran)
       return;
     }
 
+    const requestId = ++searchRequestId.current;
     const t = setTimeout(async () => {
       setSearching(true);
       setError('');
       try {
         const list = await StaffService.searchStaff(q);
-        setStaff(list);
+        if (requestId === searchRequestId.current) {
+          setStaff(list);
+        }
       } catch (err: any) {
         console.error(err);
-        setError(err?.response?.data?.detail || 'Search failed.');
+        if (requestId === searchRequestId.current) {
+          setError(err?.response?.data?.detail || 'Search failed.');
+        }
       } finally {
-        setSearching(false);
+        if (requestId === searchRequestId.current) {
+          setSearching(false);
+        }
       }
     }, 350);
 
     return () => clearTimeout(t);
-  }, [search, loadStaff]);
+  }, [search]);
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    if (value.trim() === '') {
+      loadStaff();
+    }
+  };
 
   const filteredStaff = useMemo(() => {
     return staff.filter((s) => {
@@ -205,15 +224,14 @@ export default function StaffManagement() {
     total: dashboard?.staff?.total ?? staff.length,
     onDuty: dashboard?.staff?.on_duty ?? 0,
     onBreak: dashboard?.staff?.on_break ?? 0,
-    pending:
-      (dashboard?.tasks?.new ?? 0) +
-      (dashboard?.tasks?.in_progress ?? 0),
+    pending: (dashboard?.tasks?.new ?? 0) + (dashboard?.tasks?.in_progress ?? 0),
     completedToday: dashboard?.tasks?.completed ?? 0,
   };
 
   const clearFilters = () => {
     setSearch('');
     setActiveFilter('all');
+    loadStaff();
   };
 
   const handleAddStaff = async (data: {
@@ -235,11 +253,7 @@ export default function StaffManagement() {
         },
       });
 
-      const newId =
-        created?.id ??
-        created?.user?.id ??
-        created?.staff?.id ??
-        null;
+      const newId = created?.id ?? created?.user?.id ?? created?.staff?.id ?? null;
 
       if (data.group_id != null && data.group_id > 0 && newId != null) {
         try {
@@ -261,6 +275,51 @@ export default function StaffManagement() {
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleUpdateStaff = async (data: {
+    staffProfileId: number;
+    full_name: string;
+    phone: string;
+    active: boolean;
+  }) => {
+    setSubmitting(true);
+    setError('');
+    try {
+      await StaffService.updateStaff(data.staffProfileId, {
+        full_name: data.full_name,
+        phone: data.phone,
+        active: data.active,
+      });
+      setEditMember(null);
+      setSearch('');
+      await loadStaff();
+      await loadDashboard();
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.response?.data?.detail || 'Failed to update staff.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDestroyStaff = async (member: StaffListItem) => {
+    const pid = profileIdOf(member);
+    if (pid == null) {
+      setError('Cannot delete: staff profile id is missing.');
+      return;
+    }
+    if (!window.confirm(`Delete staff "${displayName(member)}"?`)) return;
+
+    setError('');
+    try {
+      await StaffService.destroyStaff(pid);
+      await loadStaff();
+      await loadDashboard();
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.response?.data?.detail || 'Failed to delete staff.');
     }
   };
 
@@ -338,8 +397,8 @@ export default function StaffManagement() {
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="e.g. Olha"
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="e.g. Sillvallsi"
                 className={`${inputClass} pl-9`}
               />
             </div>
@@ -374,22 +433,24 @@ export default function StaffManagement() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredStaff.map((member) => {
+          {filteredStaff.map((member, index) => {
             const name = displayName(member);
             const phone = member.staff_profile?.phone || '—';
             const role = groupsLabel(member.groups);
             const active = Boolean(member.is_active || member.staff_profile?.active);
-            const color = colorFromId(member.id);
+            const color = colorFromId(member.id || index);
             const initials = initialsFromName(name);
             const hired = member.staff_profile?.hired_at
               ? new Date(member.staff_profile.hired_at).toLocaleDateString()
               : member.staff_profile?.created_at
                 ? new Date(member.staff_profile.created_at).toLocaleDateString()
                 : '—';
+            const pid = profileIdOf(member);
+            const canMutate = pid != null;
 
             return (
               <div
-                key={member.id}
+                key={member.id || `search-${index}-${name}`}
                 className="flex flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -419,10 +480,12 @@ export default function StaffManagement() {
                 </div>
 
                 <div className="mt-4 space-y-2 text-sm text-gray-600">
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 shrink-0 text-gray-400" />
-                    <span className="truncate">{member.email}</span>
-                  </div>
+                  {member.email ? (
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 shrink-0 text-gray-400" />
+                      <span className="truncate">{member.email}</span>
+                    </div>
+                  ) : null}
                   <div className="flex items-center gap-2">
                     <Phone className="h-4 w-4 shrink-0 text-gray-400" />
                     <span>{phone}</span>
@@ -433,17 +496,19 @@ export default function StaffManagement() {
                 <div className="mt-auto grid grid-cols-2 gap-2 pt-5">
                   <button
                     type="button"
-                    className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    disabled
-                    title="Edit API not provided yet"
+                    disabled={!canMutate}
+                    onClick={() => setEditMember(member)}
+                    className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    title={canMutate ? 'Edit' : 'Edit needs staff_profile id (use full list, not search)'}
                   >
                     <Pencil className="h-3.5 w-3.5" /> Edit
                   </button>
                   <button
                     type="button"
-                    className="flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
-                    disabled
-                    title="Delete API not provided yet"
+                    disabled={!canMutate}
+                    onClick={() => handleDestroyStaff(member)}
+                    className="flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-500 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    title={canMutate ? 'Delete' : 'Delete needs staff_profile id'}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -452,7 +517,7 @@ export default function StaffManagement() {
             );
           })}
 
-          {filteredStaff.length === 0 && !loading && (
+          {filteredStaff.length === 0 && !loading && !searching && (
             <div className="col-span-full rounded-xl border border-dashed border-gray-300 bg-white py-16 text-center text-sm text-gray-400">
               No staff match the current filters.
             </div>
@@ -464,6 +529,16 @@ export default function StaffManagement() {
         <AddStaffModal
           onClose={() => setAddStaffOpen(false)}
           onSubmit={handleAddStaff}
+          submitting={submitting}
+        />
+      )}
+
+      {editMember && profileIdOf(editMember) != null && (
+        <EditStaffModal
+          member={editMember}
+          staffProfileId={profileIdOf(editMember)!}
+          onClose={() => setEditMember(null)}
+          onSubmit={handleUpdateStaff}
           submitting={submitting}
         />
       )}
@@ -564,6 +639,84 @@ function AddStaffModal({
           >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
             Add Staff
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function EditStaffModal({
+  member,
+  staffProfileId,
+  onClose,
+  onSubmit,
+  submitting,
+}: {
+  member: StaffListItem;
+  staffProfileId: number;
+  onClose: () => void;
+  onSubmit: (data: {
+    staffProfileId: number;
+    full_name: string;
+    phone: string;
+    active: boolean;
+  }) => void;
+  submitting: boolean;
+}) {
+  const [fullName, setFullName] = useState(member.staff_profile?.full_name || '');
+  const [phone, setPhone] = useState(member.staff_profile?.phone || '');
+  const [active, setActive] = useState(
+    Boolean(member.is_active || member.staff_profile?.active)
+  );
+
+  return (
+    <Modal title="Edit Staff" onClose={onClose}>
+      <div className="space-y-4">
+        <Field label="Full name">
+          <input
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className={inputClass}
+          />
+        </Field>
+        <Field label="Phone">
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} />
+        </Field>
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
+            className="rounded border-gray-300"
+          />
+          Active
+        </label>
+        <p className="text-xs text-gray-400">Profile id: {staffProfileId}</p>
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={submitting || !fullName.trim()}
+            onClick={() =>
+              onSubmit({
+                staffProfileId,
+                full_name: fullName.trim(),
+                phone: phone.trim(),
+                active,
+              })
+            }
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+            Save
           </button>
         </div>
       </div>
