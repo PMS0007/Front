@@ -172,12 +172,11 @@ export default function StaffManagement() {
     loadDashboard();
   }, [loadStaff, loadDashboard]);
 
-  // Debounced search — response shape: { data: [ { full_name, phone, hired_at } ] }
+
   useEffect(() => {
     const q = search.trim();
 
     if (q === '') {
-      // only reload full list when user cleared search (not on first mount — loadStaff already ran)
       return;
     }
 

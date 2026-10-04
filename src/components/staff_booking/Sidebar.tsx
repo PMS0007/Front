@@ -22,7 +22,6 @@ const navItems: NavItem[] = [
   { label: "Rooms", href: "/rooms", icon: BedDouble },
   { label: "Bookings", href: "/bookings", icon: CalendarDays, badge: 3 },
   { label: "Staff", href: "/staff-management", icon: PlaneTakeoff },
-  { label: "Billing", href: "/billing", icon: Receipt },
   { label: "Reports", href: "/reports", icon: BarChart3 },
   { label: "Settings", href: "/settings", icon: Settings },
 ];

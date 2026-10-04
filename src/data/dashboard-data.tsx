@@ -86,6 +86,5 @@ export const navItems = [
   { label: "Dashboard", icon: "grid", href: "/staff" },
   { label: "Rooms", icon: "door", href: "/rooms" },
   { label: "Bookings", icon: "calendar", href: "/bookings", badge: 3 },
-  { label: "Staff", icon: "map", href: "/staff-management" },
-  { label: "Billing", icon: "file", href: "/billing" },
+  { label: "Staff", icon: "map", href: "/staff-management" }
 ] as const;
