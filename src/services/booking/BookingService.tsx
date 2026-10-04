@@ -26,10 +26,7 @@ export const BookingService = {
     return res
   },
 
-  /**
-   * Client booking — form-data fields:
-   * check_in_date, check_out_date, guest_count, room_type, room
-   */
+
   create_booking: async (payload: ClientCreateBookingPayload): Promise<IBooking> => {
     const form = new FormData()
     form.append('check_in_date', payload.check_in_date)
@@ -44,9 +41,8 @@ export const BookingService = {
     return res.data
   },
 
-  /** POST create_payment/{bookingId}/ */
+
   create_payment: async (bookingId: number, payMethod?: string) => {
-    // pay_method is optional illusion on client; backend may ignore
     const body = payMethod ? { pay_method: payMethod } : undefined
     const res = await apiService.post(`${urls.create_payment}${bookingId}/`, body)
     return res.data
