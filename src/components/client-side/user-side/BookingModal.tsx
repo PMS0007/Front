@@ -16,6 +16,7 @@ import { cn } from "@/lib/cn";
 import RoomService from "@/services/rooms/RoomService";
 import BookingService from "@/services/booking/BookingService";
 import type { IRoom } from "@/interface/RoomInterface";
+import PaymentForm from "@/components/payment/PaymentForm";
 
 type BookingModalProps = {
   open: boolean;
@@ -105,6 +106,8 @@ export default function BookingModal({
   const [payMethod, setPayMethod] = useState<string>("card");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
+  const [paymentBookingId, setPaymentBookingId] = useState<number | null>(null);
   const [apiRooms, setApiRooms] = useState<IRoom[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
 
@@ -178,6 +181,8 @@ export default function BookingModal({
   function handleClose() {
     setErrors({});
     setSubmitting(false);
+    setPaymentClientSecret(null);
+    setPaymentBookingId(null);
     onClose();
   }
 
@@ -218,33 +223,44 @@ export default function BookingModal({
       });
 
       const bookingId = booking?.id;
-      if (bookingId != null) {
+      if (bookingId == null) {
+        setErrors({ form: "Booking created but no id was returned." });
+        return;
+      }
+
+      // Non-card: no Stripe UI
+      if (payMethod !== "card") {
         try {
           await BookingService.create_payment(bookingId, payMethod);
         } catch (payErr) {
           console.error("Payment step failed", payErr);
-          // Booking exists; still report partial success
-          onSuccess(
-            `Booking #${bookingId} created (${nights} night${nights === 1 ? "" : "s"} · ${title}). Payment step failed — contact the hotel.`,
-          );
-          setGuest({ name: "", email: "", phone: "" });
-          handleClose();
-          return;
         }
+        onSuccess(
+          `Booking #${bookingId} created (${nights} night${nights === 1 ? "" : "s"} · ${title}). Pay method: ${payMethod}.`,
+        );
+        setGuest({ name: "", email: "", phone: "" });
+        handleClose();
+        return;
       }
 
-      const priceLabel =
-        booking?.total_price != null
-          ? ` · total ${booking.total_price}`
-          : total
-            ? ` · ${formatMoney(total)}`
-            : "";
+      // Card: create_payment returns { client_secret, pay_id }
+      const paymentRes = await BookingService.create_payment(bookingId, payMethod);
+      const secret =
+        paymentRes?.client_secret ||
+        paymentRes?.clientSecret ||
+        paymentRes?.payment_intent?.client_secret ||
+        null;
 
-      onSuccess(
-        `Booking confirmed${bookingId != null ? ` #${bookingId}` : ""}. ${nights} night${nights === 1 ? "" : "s"} in ${title}${priceLabel}. Confirmation will go to ${guest.email}.`,
-      );
-      setGuest({ name: "", email: "", phone: "" });
-      handleClose();
+      if (!secret) {
+        setErrors({
+          form: "Booking created, but no client_secret in create_payment response.",
+        });
+        return;
+      }
+
+      // Keep booking modal open underneath; show Stripe payment modal
+      setPaymentBookingId(bookingId);
+      setPaymentClientSecret(secret);
     } catch (err: any) {
       console.error(err);
       const detail =
@@ -477,6 +493,23 @@ export default function BookingModal({
           </motion.div>
         </motion.div>
       ) : null}
+    {paymentClientSecret ? (
+      <PaymentForm
+        clientSecret={paymentClientSecret}
+        bookingId={paymentBookingId ?? undefined}
+        onSuccess={(msg) => {
+          onSuccess(msg);
+          setGuest({ name: "", email: "", phone: "" });
+          setPaymentClientSecret(null);
+          setPaymentBookingId(null);
+          handleClose();
+        }}
+        onClose={() => {
+          setPaymentClientSecret(null);
+          setPaymentBookingId(null);
+        }}
+      />
+    ) : null}
     </AnimatePresence>
   );
 }
