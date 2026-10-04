@@ -31,4 +31,6 @@ export const urls = {
   get_dashboard_status: "get_dashboard_status/",
   update_staff: "update_staff/",
   destroy_staff: "destroy_staff/",
+  create_booking: "create_booking/",
+  create_payment: "create_payment/",
 };

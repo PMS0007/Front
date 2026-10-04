@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
-import { rooms } from "@/data/hotelData";
 import {
   formatLongDate,
   formatMoney,
-  getRoom,
   isoDate,
   isValidEmail,
   isValidPhone,
@@ -15,6 +13,9 @@ import {
   type BookingDraft,
 } from "@/lib/booking";
 import { cn } from "@/lib/cn";
+import RoomService from "@/services/rooms/RoomService";
+import BookingService from "@/services/booking/BookingService";
+import type { IRoom } from "@/interface/RoomInterface";
 
 type BookingModalProps = {
   open: boolean;
@@ -30,7 +31,63 @@ type GuestForm = {
   phone: string;
 };
 
-type FieldErrors = Partial<Record<keyof GuestForm | "dates" | "guests", string>>;
+type FieldErrors = Partial<
+  Record<keyof GuestForm | "dates" | "guests" | "room" | "form", string>
+>;
+
+const PAY_METHODS = [
+  { value: "card", label: "Card" },
+  { value: "cash", label: "Cash at hotel" },
+  { value: "online", label: "Online transfer" },
+] as const;
+
+function unwrapRooms(data: unknown): IRoom[] {
+  if (Array.isArray(data)) return data as IRoom[];
+  if (data && typeof data === "object") {
+    const obj = data as Record<string, unknown>;
+    if (Array.isArray(obj.data)) return obj.data as IRoom[];
+    if (Array.isArray(obj.results)) return obj.results as IRoom[];
+    if (Array.isArray(obj.rooms)) return obj.rooms as IRoom[];
+  }
+  return [];
+}
+
+function roomTypeIdOf(room: IRoom): number | null {
+  const rt = room.room_type;
+  if (rt == null) return null;
+  if (typeof rt === "number") return rt;
+  if (typeof rt === "object" && typeof (rt as { id?: number }).id === "number") {
+    return (rt as { id: number }).id;
+  }
+  return null;
+}
+
+function roomLabel(room: IRoom): string {
+  const typeName =
+    typeof room.room_type === "object" && room.room_type?.name
+      ? room.room_type.name
+      : "Room";
+  const num = room.room_number != null ? `#${room.room_number}` : `#${room.id}`;
+  return `${typeName} ${num}`;
+}
+
+function roomPrice(room: IRoom | undefined): number {
+  if (!room) return 0;
+  const rt = room.room_type;
+  if (rt && typeof rt === "object" && rt.base_price != null) {
+    return Number(rt.base_price) || 0;
+  }
+  return 0;
+}
+
+function roomCapacity(room: IRoom | undefined): number {
+  if (!room) return 10;
+  const rt = room.room_type;
+  if (rt && typeof rt === "object" && rt.capacity != null) {
+    return Number(rt.capacity) || 10;
+  }
+  return 10;
+}
 
 export default function BookingModal({
   open,
@@ -45,12 +102,65 @@ export default function BookingModal({
     email: "",
     phone: "",
   });
+  const [payMethod, setPayMethod] = useState<string>("card");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
+  const [apiRooms, setApiRooms] = useState<IRoom[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
 
-  const room = getRoom(draft.roomId) ?? rooms[0];
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+    (async () => {
+      setRoomsLoading(true);
+      try {
+        const data = await RoomService.listRoom();
+        if (cancelled) return;
+        const list = unwrapRooms(data).filter((r) => {
+          const status = (r.status || "").toLowerCase();
+          return !status || status === "available" || status === "free";
+        });
+        // if filter emptied everything, show all rooms
+        const finalList = list.length > 0 ? list : unwrapRooms(data);
+        setApiRooms(finalList);
+
+        if (finalList.length > 0) {
+          const currentId = Number(draft.roomId);
+          const exists = finalList.some((r) => r.id === currentId);
+          if (!exists && finalList[0].id != null) {
+            onChange({ ...draft, roomId: String(finalList[0].id) });
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setErrors((e) => ({
+            ...e,
+            form: "Could not load rooms. Check that you are logged in and the API is running.",
+          }));
+        }
+      } finally {
+        if (!cancelled) setRoomsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once when modal opens
+  }, [open]);
+
+  const selectedRoom = useMemo(() => {
+    const id = Number(draft.roomId);
+    return apiRooms.find((r) => r.id === id);
+  }, [apiRooms, draft.roomId]);
+
   const nights = nightsBetween(draft.checkIn, draft.checkOut);
-  const total = nights * room.price;
+  const price = roomPrice(selectedRoom);
+  const capacity = roomCapacity(selectedRoom);
+  const total = nights * price;
+  const title = selectedRoom ? roomLabel(selectedRoom) : "Select a room";
 
   useEffect(() => {
     if (!open) return;
@@ -75,30 +185,77 @@ export default function BookingModal({
     const next: FieldErrors = {};
     if (nights < 1) next.dates = "Check-out must be after check-in.";
     if (draft.guests < 1) next.guests = "At least one guest is required.";
-    if (draft.guests > room.maxGuests) {
-      next.guests = `${room.title} sleeps up to ${room.maxGuests} guests.`;
+    if (draft.guests > capacity) {
+      next.guests = `This room sleeps up to ${capacity} guests.`;
     }
+    if (!selectedRoom?.id) next.room = "Please select a room.";
+    const typeId = selectedRoom ? roomTypeIdOf(selectedRoom) : null;
+    if (selectedRoom && typeId == null) next.room = "Room type is missing for this room.";
     if (!guest.name.trim()) next.name = "Please enter your name.";
     if (!isValidEmail(guest.email)) next.email = "Enter a valid email address.";
     if (!isValidPhone(guest.phone)) next.phone = "Enter a valid phone number.";
     return next;
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const nextErrors = validate();
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
+    const typeId = roomTypeIdOf(selectedRoom!);
+    if (typeId == null || selectedRoom?.id == null) return;
+
     setSubmitting(true);
-    window.setTimeout(() => {
+    setErrors({});
+    try {
+      const booking = await BookingService.create_booking({
+        check_in_date: draft.checkIn,
+        check_out_date: draft.checkOut,
+        guest_count: draft.guests,
+        room_type: typeId,
+        room: selectedRoom.id,
+      });
+
+      const bookingId = booking?.id;
+      if (bookingId != null) {
+        try {
+          await BookingService.create_payment(bookingId, payMethod);
+        } catch (payErr) {
+          console.error("Payment step failed", payErr);
+          // Booking exists; still report partial success
+          onSuccess(
+            `Booking #${bookingId} created (${nights} night${nights === 1 ? "" : "s"} · ${title}). Payment step failed — contact the hotel.`,
+          );
+          setGuest({ name: "", email: "", phone: "" });
+          handleClose();
+          return;
+        }
+      }
+
+      const priceLabel =
+        booking?.total_price != null
+          ? ` · total ${booking.total_price}`
+          : total
+            ? ` · ${formatMoney(total)}`
+            : "";
+
       onSuccess(
-        `Booking confirmed (mock). ${nights} night${nights === 1 ? "" : "s"} in ${room.title} — we’ll email ${guest.email}.`,
+        `Booking confirmed${bookingId != null ? ` #${bookingId}` : ""}. ${nights} night${nights === 1 ? "" : "s"} in ${title}${priceLabel}. Confirmation will go to ${guest.email}.`,
       );
       setGuest({ name: "", email: "", phone: "" });
-      setSubmitting(false);
       handleClose();
-    }, 700);
+    } catch (err: any) {
+      console.error(err);
+      const detail =
+        err?.response?.data?.detail ||
+        err?.response?.data?.non_field_errors?.[0] ||
+        (typeof err?.response?.data === "string" ? err.response.data : null) ||
+        "Could not create booking. Make sure you are logged in.";
+      setErrors({ form: String(detail) });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -150,12 +307,14 @@ export default function BookingModal({
               noValidate
             >
               <div className="space-y-4">
+                {errors.form ? (
+                  <p className="rounded-xl border border-clay/30 bg-clay/10 px-3 py-2 text-sm text-clay" role="alert">
+                    {errors.form}
+                  </p>
+                ) : null}
+
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field
-                    label="Check-in"
-                    error={errors.dates}
-                    htmlFor="book-in"
-                  >
+                  <Field label="Check-in" error={errors.dates} htmlFor="book-in">
                     <input
                       id="book-in"
                       type="date"
@@ -180,17 +339,14 @@ export default function BookingModal({
                     />
                   </Field>
                 </div>
+
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field
-                    label="Guests"
-                    error={errors.guests}
-                    htmlFor="book-guests"
-                  >
+                  <Field label="Guests" error={errors.guests} htmlFor="book-guests">
                     <input
                       id="book-guests"
                       type="number"
                       min={1}
-                      max={room.maxGuests}
+                      max={capacity}
                       value={draft.guests}
                       onChange={(event) =>
                         onChange({
@@ -201,23 +357,47 @@ export default function BookingModal({
                       className={inputClass(Boolean(errors.guests))}
                     />
                   </Field>
-                  <Field label="Room" htmlFor="book-room">
+                  <Field label="Room" error={errors.room} htmlFor="book-room">
                     <select
                       id="book-room"
                       value={draft.roomId}
+                      disabled={roomsLoading || apiRooms.length === 0}
                       onChange={(event) =>
                         onChange({ ...draft, roomId: event.target.value })
                       }
-                      className={inputClass(false)}
+                      className={inputClass(Boolean(errors.room))}
                     >
-                      {rooms.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.title}
-                        </option>
-                      ))}
+                      {roomsLoading ? (
+                        <option value="">Loading rooms…</option>
+                      ) : apiRooms.length === 0 ? (
+                        <option value="">No rooms available</option>
+                      ) : (
+                        apiRooms.map((item) => (
+                          <option key={item.id} value={String(item.id)}>
+                            {roomLabel(item)}
+                            {item.status ? ` · ${item.status}` : ""}
+                          </option>
+                        ))
+                      )}
                     </select>
                   </Field>
                 </div>
+
+                <Field label="Payment method" htmlFor="book-pay">
+                  <select
+                    id="book-pay"
+                    value={payMethod}
+                    onChange={(event) => setPayMethod(event.target.value)}
+                    className={inputClass(false)}
+                  >
+                    {PAY_METHODS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
                 <Field label="Full name" error={errors.name} htmlFor="book-name">
                   <input
                     id="book-name"
@@ -262,21 +442,19 @@ export default function BookingModal({
                 <p className="text-xs tracking-[0.2em] text-moss uppercase">
                   Summary
                 </p>
-                <h3 className="mt-2 font-display text-2xl text-forest">
-                  {room.title}
-                </h3>
+                <h3 className="mt-2 font-display text-2xl text-forest">{title}</h3>
                 <ul className="mt-4 space-y-2 text-sm text-muted">
                   <li>
-                    {formatLongDate(draft.checkIn)} →{" "}
-                    {formatLongDate(draft.checkOut)}
+                    {formatLongDate(draft.checkIn)} → {formatLongDate(draft.checkOut)}
                   </li>
                   <li>
                     {nights || 0} night{nights === 1 ? "" : "s"} · {draft.guests}{" "}
                     guest{draft.guests === 1 ? "" : "s"}
                   </li>
                   <li>
-                    {formatMoney(room.price)} × {nights || 0}
+                    {formatMoney(price)} × {nights || 0}
                   </li>
+                  <li className="text-xs">Pay · {PAY_METHODS.find((m) => m.value === payMethod)?.label}</li>
                 </ul>
                 <div className="mt-5 flex items-end justify-between border-t border-sand pt-4">
                   <span className="text-sm text-muted">Total</span>
@@ -286,13 +464,13 @@ export default function BookingModal({
                 </div>
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || roomsLoading || apiRooms.length === 0}
                   className="mt-6 w-full rounded-full bg-forest py-3 text-sm text-cream transition hover:bg-moss disabled:opacity-60"
                 >
-                  {submitting ? "Confirming…" : "Confirm Booking (Mock)"}
+                  {submitting ? "Confirming…" : "Confirm booking"}
                 </button>
                 <p className="mt-3 text-center text-xs text-muted">
-                  No payment is taken. This is a demo reservation.
+                  Creates a real booking, then starts payment for the selected method.
                 </p>
               </aside>
             </form>
